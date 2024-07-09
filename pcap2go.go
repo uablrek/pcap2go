@@ -11,6 +11,8 @@ import (
 
 func main() {
 	variable := flag.String("variable", "pcap_packets", "Name of the variable")
+	eth := flag.Bool("eth", false, "Include the eth header")
+	cap := flag.Int("cap", 0, "If >0 cap packet length")
 	flag.Parse()
 	if flag.NArg() < 1 {
 		fmt.Println(`
@@ -22,13 +24,13 @@ slices. Intended for including captured packets in unit tests.
 		flag.PrintDefaults()
 		return
 	}
-	if err := readFile(flag.Arg(0), *variable); err != nil {
+	if err := readFile(flag.Arg(0), *variable, *eth, *cap); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 }
 
-func readFile(file, variable string) error {
+func readFile(file, variable string, includeEth bool, cap int) error {
 	handle, err := pcap.OpenOffline(file)
 	if err != nil {
 		return err
@@ -36,8 +38,15 @@ func readFile(file, variable string) error {
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	fmt.Printf("var %s = [][]byte{\n", variable)
 	for packet := range packetSource.Packets() {
+		pdata := packet.Data()
+		if ! includeEth {
+			pdata = pdata[14:]
+		}
+		if cap > 0 && cap < len(pdata) {
+			pdata = pdata[:cap]
+		}
 		fmt.Printf("\t[]byte{\n")
-		printBytes(packet.Data())
+		printBytes(pdata)
 		fmt.Printf("\t},\n")
 	}
 	fmt.Printf("}\n")
